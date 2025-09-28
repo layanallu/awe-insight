@@ -1,0 +1,21 @@
+Failure,Action,Trials,Success,SuccessRate
+Corrosion,Monitor,0,0,0.0
+Corrosion,Add Iron,0,0,0.0
+Corrosion,Use Ceramic,0,0,0.0
+Corrosion,Add Platinum,0,0,0.0
+Degradation,Monitor,0,0,0.0
+Degradation,Use Ceramic,0,0,0.0
+Degradation,Add Iron,0,0,0.0
+Degradation,Add Platinum,0,0,0.0
+Diaphragm,Add Platinum,8,8,1.0
+Diaphragm,Monitor,0,0,0.0
+Diaphragm,Add Iron,0,0,0.0
+Diaphragm,Use Ceramic,0,0,0.0
+Leakage,Monitor,8,8,1.0
+Leakage,Add Platinum,1,1,1.0
+Leakage,Use Ceramic,0,0,0.0
+Leakage,Add Iron,0,0,0.0
+Vessel,Use Ceramic,11,11,1.0
+Vessel,Monitor,0,0,0.0
+Vessel,Add Iron,0,0,0.0
+Vessel,Add Platinum,0,0,0.0

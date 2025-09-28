@@ -1,0 +1,47 @@
+AWE Recommendation Report
+=========================
+Rows: 11528
+Phase counts: {'Shutdown': 5827, 'Normal': 5107, 'Startup': 538, 'Other': 56}
+
+Events (merged): {'Diaphragm': 8, 'Degradation': 0, 'Leakage': 12, 'Vessel': 12, 'Corrosion': 0}
+Global thresholds: {'Diaphragm': 0.011130787349661504, 'Leakage': 6.28340110394903e-05, 'Degradation': None, 'Vessel_seq': 0.03430265560746193}
+Phase thresholds: {'Diaphragm': {}, 'Leakage': {}, 'Degradation': {}}
+
+Recent actions fired (up to 10):
+ - t=07:02:00  phase=Startup  fail=Leakage  score=0.020  thr=0.000  → Monitor
+ - t=07:02:00  phase=Startup  fail=Vessel  score=0.620  thr=0.500  → Use Ceramic
+ - t=07:03:00  phase=Startup  fail=Diaphragm  score=0.021  thr=0.011  → Monitor
+ - t=14:58:00  phase=Normal  fail=Leakage  score=1.000  thr=0.000  → Add Platinum
+ - t=18:03:00  phase=Normal  fail=Diaphragm  score=1.000  thr=0.011  → Add Platinum
+ - t=18:07:00  phase=Normal  fail=Vessel  score=0.634  thr=0.500  → Use Ceramic
+ - t=18:18:00  phase=Startup  fail=Leakage  score=0.020  thr=0.000  → Monitor
+ - t=07:02:00  phase=Startup  fail=Leakage  score=0.020  thr=0.000  → Monitor
+ - t=07:02:00  phase=Startup  fail=Vessel  score=0.620  thr=0.500  → Use Ceramic
+ - t=07:03:00  phase=Startup  fail=Diaphragm  score=0.021  thr=0.011  → Monitor
+
+Policy snapshot (top rows per failure):
+ Diaphragm:
+    - Add Platinum: Trials=8  Success=8  SR=1.000
+    - Monitor: Trials=0  Success=0  SR=0.000
+    - Add Iron: Trials=0  Success=0  SR=0.000
+    - Use Ceramic: Trials=0  Success=0  SR=0.000
+ Leakage:
+    - Monitor: Trials=8  Success=8  SR=1.000
+    - Add Platinum: Trials=1  Success=1  SR=1.000
+    - Use Ceramic: Trials=0  Success=0  SR=0.000
+    - Add Iron: Trials=0  Success=0  SR=0.000
+ Vessel:
+    - Use Ceramic: Trials=11  Success=11  SR=1.000
+    - Monitor: Trials=0  Success=0  SR=0.000
+    - Add Iron: Trials=0  Success=0  SR=0.000
+    - Add Platinum: Trials=0  Success=0  SR=0.000
+ Degradation:
+    - Monitor: Trials=0  Success=0  SR=0.000
+    - Use Ceramic: Trials=0  Success=0  SR=0.000
+    - Add Iron: Trials=0  Success=0  SR=0.000
+    - Add Platinum: Trials=0  Success=0  SR=0.000
+ Corrosion:
+    - Monitor: Trials=0  Success=0  SR=0.000
+    - Add Iron: Trials=0  Success=0  SR=0.000
+    - Use Ceramic: Trials=0  Success=0  SR=0.000
+    - Add Platinum: Trials=0  Success=0  SR=0.000

@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AWE Insight — Liquid Glass Ops Console</title>
+
+  <!-- Tailwind (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            // UI base
+            ink:'#0b1020', night:'#0f2027', ocean:'#1a2a6c',
+            mist:'rgba(255,255,255,0.55)', glass:'rgba(255,255,255,0.10)',
+            aurora:'#46e0c2', neon:'#7a5cff',
+            // Chart palette
+            risk:'#2DD4BF',        /* teal 400 */
+            thr:'#F59E0B',         /* amber 500 */
+            act:'#7CFF65',         /* neon green */
+            grid:'rgba(255,255,255,0.16)'
+          },
+          boxShadow:{ glass:'0 10px 40px rgba(0,0,0,0.25)', soft:'0 6px 24px rgba(0,0,0,0.15)' },
+          backdropBlur:{ xs:'2px', sm:'6px', md:'12px', lg:'22px' }
+        }
+      }
+    }
+  </script>
+
+  <!-- Plotly + Papa + Day.js -->
+  <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
+
+  <style>
+    /* Liquid glass backdrops */
+    body{
+      background:
+        radial-gradient(1200px 800px at 8% 8%, rgba(122,92,255,.18), transparent 60%),
+        radial-gradient(1200px 800px at 92% 18%, rgba(70,224,194,.16), transparent 60%),
+        linear-gradient(180deg,#0b1020 0%,#0b1020 100%);
+      min-height:100vh; color:#e8eef7;
+    }
+    .glass{
+      background:rgba(255,255,255,.10);
+      border:1px solid rgba(255,255,255,.18);
+      border-radius:18px; box-shadow:0 10px 40px rgba(0,0,0,.25);
+      -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+    }
+    .btn{
+      background:linear-gradient(180deg, rgba(255,255,255,.20), rgba(255,255,255,.08));
+      border:1px solid rgba(255,255,255,.28); border-radius:12px;
+      padding:10px 14px; transition:transform .15s, background .2s, box-shadow .2s;
+    }
+    .btn:hover{ transform:translateY(-1px); box-shadow:0 8px 24px rgba(0,0,0,.25); }
+    .chip{ padding:4px 10px; background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.22); border-radius:999px; }
+    .card-title{ color:#e9f1ff; letter-spacing:.2px; }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    .divider{ height:1px; background:linear-gradient(90deg,transparent,rgba(255,255,255,.20),transparent); }
+    .brand-gradient{ background:linear-gradient(90deg,#7a5cff,#46e0c2); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  </style>
+</head>
+<body class="antialiased selection:bg-aurora/20 selection:text-white">
+
+  <!-- NAV -->
+  <header class="glass mx-auto max-w-7xl mt-6 px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-4">
+      <div class="w-10 h-10 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" stroke="url(#g1)" stroke-width="2"/>
+          <defs><linearGradient id="g1" x1="0" y1="0" x2="24" y2="24">
+            <stop stop-color="#7a5cff"/><stop offset="1" stop-color="#46e0c2"/>
+          </linearGradient></defs>
+        </svg>
+      </div>
+      <div>
+        <div class="text-xl font-semibold tracking-wide">AWE <span class="brand-gradient">Insight</span></div>
+        <div class="text-sm text-white/70 -mt-1">AKWA Power</div>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <label class="btn cursor-pointer text-sm">Load CSV/TXT<input id="fileInput" type="file" accept=".csv,.txt" multiple class="hidden"></label>
+      <label class="btn cursor-pointer text-sm">Pick project folder<input id="dirInput" type="file" webkitdirectory directory multiple class="hidden"></label>
+      <button id="demoBtn" class="btn text-sm">Demo Mode</button>
+      <a href="#" id="helpBtn" class="btn text-sm">Help</a>
+    </div>
+  </header>
+
+  <!-- CONTENT -->
+  <main class="mx-auto max-w-7xl px-4 md:px-6 mt-6 mb-20">
+    <!-- STATUS -->
+    <section class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="glass p-5">
+        <div class="flex items-center justify-between">
+          <h3 class="card-title text-lg">Files</h3>
+          <span id="fileBadge" class="chip text-xs">Looking…</span>
+        </div>
+        <div class="mt-3 text-white/80 text-sm leading-6">
+          <ul class="list-disc list-inside mt-2">
+            <li><span class="mono">AWE_risks.csv</span></li>
+            <li><span class="mono">AWE_actions.csv</span></li>
+            <li><span class="mono">AWE_policy.csv</span></li>
+            <li><span class="mono">AWE_rec_report.txt</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="glass p-5">
+        <div class="flex items-center justify-between">
+          <h3 class="card-title text-lg">KPIs</h3>
+          <div class="flex gap-2">
+            <span id="phaseBadge" class="chip text-xs">Phases: —</span>
+            <span id="actionsBadge" class="chip text-xs">Actions: —</span>
+          </div>
+        </div>
+        <div id="kpiGrid" class="grid grid-cols-3 gap-3 mt-4">
+          <div class="p-3 rounded-xl bg-white/10 border border-white/20">
+            <div class="text-xs text-white/60">Rows</div>
+            <div id="kpiRows" class="text-xl font-semibold mt-1">—</div>
+          </div>
+          <div class="p-3 rounded-xl bg-white/10 border border-white/20">
+            <div class="text-xs text-white/60">Risk Hits</div>
+            <div id="kpiRiskHits" class="text-xl font-semibold mt-1">—</div>
+          </div>
+          <div class="p-3 rounded-xl bg-white/10 border border-white/20">
+            <div class="text-xs text-white/60">Unique Failures</div>
+            <div id="kpiFails" class="text-xl font-semibold mt-1">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass p-5">
+        <div class="flex items-center justify-between">
+          <h3 class="card-title text-lg">Failure Focus</h3>
+          <span class="chip text-xs">Choose to update charts</span>
+        </div>
+        <div class="flex flex-wrap gap-2 mt-4" id="failureChips"></div>
+      </div>
+    </section>
+
+    <!-- CHARTS -->
+    <section class="grid grid-cols-1 gap-4 mt-4">
+      <div class="glass p-5">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="card-title text-lg">Risk vs Threshold Timeline</h3>
+          <div id="phaseLegend" class="text-xs text-white/70"></div>
+        </div>
+        <div id="riskChart" class="w-full" style="height: 380px;"></div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="glass p-5">
+          <h3 class="card-title text-lg mb-2">Action Log</h3>
+          <div class="divider my-2"></div>
+          <div class="overflow-auto max-h-[360px]">
+            <table class="w-full text-sm">
+              <thead class="text-white/70">
+                <tr>
+                  <th class="text-left py-1 pr-2">Time</th>
+                  <th class="text-left py-1 pr-2">Phase</th>
+                  <th class="text-left py-1 pr-2">Failure</th>
+                  <th class="text-left py-1 pr-2">Score</th>
+                  <th class="text-left py-1 pr-2">Threshold</th>
+                  <th class="text-left py-1 pr-2">Action</th>
+                </tr>
+              </thead>
+              <tbody id="actionTbody" class="text-white/90"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="glass p-5">
+          <h3 class="card-title text-lg mb-2">Policy Snapshot</h3>
+          <div class="divider my-2"></div>
+          <div class="overflow-auto max-h-[360px]">
+            <table class="w-full text-sm">
+              <thead class="text-white/70">
+                <tr>
+                  <th class="text-left py-1 pr-2">Failure</th>
+                  <th class="text-left py-1 pr-2">Action</th>
+                  <th class="text-left py-1 pr-2">Trials</th>
+                  <th class="text-left py-1 pr-2">Success</th>
+                  <th class="text-left py-1 pr-2">SR</th>
+                </tr>
+              </thead>
+              <tbody id="policyTbody" class="text-white/90"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- REPORT -->
+    <section class="glass p-5 mt-4">
+      <div class="flex items-center justify-between">
+        <h3 class="card-title text-lg">Recommendation Report (excerpt)</h3>
+        <span class="chip text-xs">from AWE_rec_report.txt</span>
+      </div>
+      <pre id="reportBox" class="mono text-sm text-white/80 mt-3 whitespace-pre-wrap"></pre>
+    </section>
+
+    <footer class="mt-8 text-center text-white/60 text-xs">
+      Built for the ACWA / AWE SIDF hackathon – <span class="brand-gradient"> AWE Insight</span>
+    </footer>
+  </main>
+
+  <script>
+    // ---------- State ----------
+    let risks=null, actions=null, policy=null, reportText='';
+    const FAILS=["Diaphragm","Leakage","Vessel","Degradation","Corrosion"];
+    let currentFailure="Leakage";
+
+    // ---------- Helpers ----------
+    const fmt=(n,d=0)=> (n==null||isNaN(n))?'—':Number(n).toLocaleString(undefined,{maximumFractionDigits:d});
+    const toNumber=(x)=>{ const n=Number(x); return (n==null||!isFinite(n))?null:n; };
+    const lower=(s)=> (s||'').toLowerCase();
+    const byName=(files,arr)=> Array.from(files).find(f=>arr.some(n=>f.name.toLowerCase()===n));
+
+    // ---------- Inputs ----------
+    fileInput.addEventListener('change', e=> handleLooseFiles(e.target.files));
+    dirInput.addEventListener('change', e=> handleDirectory(e.target.files));
+    window.addEventListener('dragover', e=> e.preventDefault());
+    window.addEventListener('drop', e=> { e.preventDefault(); handleLooseFiles(e.dataTransfer.files); });
+    demoBtn.addEventListener('click', demoLoad);
+    helpBtn.addEventListener('click', e=>{
+      e.preventDefault();
+      alert('Open with a local server (e.g., VSCode Live Server). If opened as file:// use “Pick project folder”.');
+    });
+
+    // ---------- Auto-load when served over HTTP(S) ----------
+    (async function bootstrap(){
+      const badge=fileBadge;
+      if (location.protocol.startsWith('http')){
+        badge.textContent='Auto-loading…';
+        try { await autoFetchSameFolder(); }
+        catch(e){ console.warn(e); badge.textContent='Auto-load failed — use Pick project folder'; }
+      } else {
+        badge.textContent='file:// — use Pick project folder or Load CSV/TXT';
+      }
+      renderAll();
+    })();
+
+    async function autoFetchSameFolder(){
+      async function tryFetchOne(names){
+        for (const n of names){
+          try{ const res=await fetch(n,{cache:'no-store'}); if(res.ok) return await res.text(); }catch(_){}
+        }
+        for (const n of names){
+          const compact=n.replaceAll(' ','');
+          try{ const res=await fetch(compact,{cache:'no-store'}); if(res.ok) return await res.text(); }catch(_){}
+        }
+        return null;
+      }
+      const risksTxt   = await tryFetchOne(['AWE_risks.csv','AWE_risks (1).csv']);
+      const actionsTxt = await tryFetchOne(['AWE_actions.csv','AWE_actions (1).csv']);
+      const policyTxt  = await tryFetchOne(['AWE_policy.csv','AWE_policy (1).csv']);
+      const reportTxt  = await tryFetchOne(['AWE_rec_report.txt','AWE_rec_report (1).txt','report.txt']);
+
+      const parseCSV=(t)=> t? Papa.parse(t,{header:true,dynamicTyping:true,skipEmptyLines:true}).data : null;
+
+      let loaded=0;
+      risks  = parseCSV(risksTxt ); if(risks ) loaded++;
+      actions= parseCSV(actionsTxt); if(actions) loaded++;
+      policy = parseCSV(policyTxt ); if(policy ) loaded++;
+      reportText = reportTxt || '';
+      fileBadge.textContent=`Loaded ${loaded + (reportText?1:0)}/4 ${loaded===3&&reportText?'✓':''}`;
+      if(!risks||!actions||!policy) throw new Error('Missing one or more CSVs.');
+      currentFailure = pickDefaultFailure();
+      renderAll();
+    }
+
+    function handleLooseFiles(files){
+      const fRisks  = Array.from(files).find(f=> lower(f.name).includes('risks'));
+      const fActions= Array.from(files).find(f=> lower(f.name).includes('actions'));
+      const fPolicy = Array.from(files).find(f=> lower(f.name).includes('policy'));
+      const fReport = Array.from(files).find(f=> lower(f.name).includes('report') || f.name.endsWith('.txt'));
+      loadMixed({fRisks,fActions,fPolicy,fReport});
+    }
+    function handleDirectory(fileList){
+      const files=Array.from(fileList);
+      const picks={
+        fRisks:  byName(files,['awe_risks.csv','awe_risks (1).csv','AWE_risks.csv','AWE_risks (1).csv']),
+        fActions:byName(files,['awe_actions.csv','awe_actions (1).csv','AWE_actions.csv','AWE_actions (1).csv']),
+        fPolicy: byName(files,['awe_policy.csv','awe_policy (1).csv','AWE_policy.csv','AWE_policy (1).csv']),
+        fReport: byName(files,['awe_rec_report.txt','awe_rec_report (1).txt','report.txt'])
+      };
+      loadMixed(picks);
+    }
+    function loadMixed({fRisks,fActions,fPolicy,fReport}){
+      let pending=0, loaded=0; fileBadge.textContent='Loading…';
+      const doneOne=()=>{ loaded++; fileBadge.textContent=`Loaded ${loaded}/4`; if(--pending===0){ currentFailure=pickDefaultFailure(); renderAll(); } };
+
+      function loadCSV(file,cb){
+        if(!file){ cb(null); doneOne(); return; }
+        pending++;
+        Papa.parse(file,{header:true,dynamicTyping:true,skipEmptyLines:true,
+          complete:(res)=>{ cb(res.data||null); doneOne(); },
+          error:()=>{ cb(null); doneOne(); }
+        });
+      }
+      function loadTXT(file,cb){
+        if(!file){ cb(''); doneOne(); return; }
+        pending++;
+        const r=new FileReader();
+        r.onload=()=>{ cb(r.result); doneOne(); };
+        r.onerror=()=>{ cb(''); doneOne(); };
+        r.readAsText(file);
+      }
+      loadCSV(fRisks, d=> risks=d);
+      loadCSV(fActions,d=> actions=d);
+      loadCSV(fPolicy, d=> policy=d);
+      loadTXT(fReport, t=> reportText=t);
+      if(pending===0) renderAll();
+    }
+
+    // ---------- Demo ----------
+    function demoLoad(){
+      const rows=700, phases=['Shutdown','Startup','Normal','Normal','Normal','Normal'];
+      risks = Array.from({length:rows}).map((_,i)=>{
+        const Phase=phases[Math.floor(i/80)%phases.length];
+        const Time = dayjs().startOf('day').add(i,'minute').format('HH:mm:ss');
+        const base = Math.max(0, Math.sin(i/36)*0.35 + (Phase==='Shutdown'?0.05:0.1));
+        const thrLeak = Phase==='Shutdown'?0.20:0.02;
+        return {
+          Time, Phase,
+          prob_Diaphragm:Math.random()*0.05, prob_Leakage:base, prob_Vessel:Math.random()*0.08,
+          rule_Diaphragm:0, rule_Leakage: base>0.25?1:0, rule_Vessel:0,
+          risk_Diaphragm:Math.random()*0.2, risk_Leakage:base, risk_Vessel:Math.random()*0.2,
+          thr_Diaphragm:0.01, thr_Leakage:thrLeak, thr_Vessel:0.5,
+          TopFailure:(base>0.3?'Leakage':'Vessel'),
+          TopScore:base, TopThr:thrLeak, TopAction: base>0.8?'Add Platinum': base>0.5?'Add Iron':'Monitor'
+        };
+      });
+      actions = risks.map((r,idx)=>({...r,idx}))
+        .filter(r=> (r.risk_Leakage>=r.thr_Leakage) && r.Phase!=='Shutdown')
+        .filter((_,i)=> i%30===0)
+        .map(r=>({ idx:r.idx, Time:r.Time, Phase:r.Phase, Failure:'Leakage',
+                   Score:r.risk_Leakage, Threshold:r.thr_Leakage, Action:r.TopAction }));
+      policy = [
+        {Failure:'Leakage', Action:'Monitor', Trials:5, Success:4, SuccessRate:0.80},
+        {Failure:'Leakage', Action:'Add Iron', Trials:3, Success:2, SuccessRate:0.67},
+        {Failure:'Vessel',  Action:'Use Ceramic', Trials:2, Success:2, SuccessRate:1.00},
+      ];
+      reportText='Demo Report\nRows: '+rows+'\nThis is a demo; load your CSV/TXT for real data.';
+      fileBadge.textContent='Demo data ✓';
+      currentFailure='Leakage';
+      renderAll();
+    }
+
+    // ---------- Rendering ----------
+    function renderAll(){ renderFailuresChips(); renderKPIs(); renderPolicy(); renderActions(); renderReport(); renderChart(); }
+
+    function renderFailuresChips(){
+      failureChips.innerHTML='';
+      FAILS.forEach(k=>{
+        const btn=document.createElement('button');
+        btn.className='chip text-sm hover:bg-white/20 transition '+(currentFailure===k?'ring-2 ring-aurora/60':'');
+        btn.textContent=k;
+        btn.onclick=()=>{ currentFailure=k; renderChart(); renderActions(); };
+        failureChips.appendChild(btn);
+      });
+    }
+
+    function renderKPIs(){
+      const rows = Array.isArray(risks)? risks.length : 0;
+      kpiRows.textContent = fmt(rows);
+      const riskHits={}, phases={}, failsSeen=new Set();
+      if(Array.isArray(risks)){
+        risks.forEach(r=>{
+          const ph=r.Phase||'—'; phases[ph]=(phases[ph]||0)+1;
+          FAILS.forEach(k=>{
+            const risk=toNumber(r['risk_'+k]), thr=toNumber(r['thr_'+k]);
+            if(risk!=null && thr!=null && risk>=thr) riskHits[k]=(riskHits[k]||0)+1;
+            if(toNumber(r['prob_'+k])!=null || toNumber(r['risk_'+k])!=null) failsSeen.add(k);
+          });
+        });
+      }
+      const totalHits=Object.values(riskHits).reduce((a,b)=>a+b,0);
+      kpiRiskHits.textContent=fmt(totalHits);
+      kpiFails.textContent=fmt(failsSeen.size);
+      phaseBadge.textContent='Phases: '+Object.keys(phases).join(', ');
+      actionsBadge.textContent='Actions: '+(Array.isArray(actions)? actions.length : 0);
+    }
+
+    function renderActions(){
+      actionTbody.innerHTML='';
+      if(!Array.isArray(actions)) return;
+      actions.filter(a=>!currentFailure||a.Failure===currentFailure)
+        .slice(0,300).forEach(a=>{
+          const tr=document.createElement('tr');
+          tr.innerHTML=`
+            <td class="py-1 pr-2">${a.Time||'—'}</td>
+            <td class="py-1 pr-2">${a.Phase||'—'}</td>
+            <td class="py-1 pr-2">${a.Failure||'—'}</td>
+            <td class="py-1 pr-2">${fmt(a.Score,3)}</td>
+            <td class="py-1 pr-2">${fmt(a.Threshold,3)}</td>
+            <td class="py-1 pr-2">${a.Action||'—'}</td>`;
+          actionTbody.appendChild(tr);
+        });
+    }
+
+    function renderPolicy(){
+      policyTbody.innerHTML='';
+      if(!Array.isArray(policy)) return;
+      policy.forEach(p=>{
+        const tr=document.createElement('tr');
+        const sr=(p.SuccessRate!=null)? (Number(p.SuccessRate)*(p.SuccessRate<=1?100:1)) : null;
+        tr.innerHTML=`
+          <td class="py-1 pr-2">${p.Failure||'—'}</td>
+          <td class="py-1 pr-2">${p.Action||'—'}</td>
+          <td class="py-1 pr-2">${fmt(p.Trials)}</td>
+          <td class="py-1 pr-2">${fmt(p.Success)}</td>
+          <td class="py-1 pr-2">${sr==null?'—':(sr.toFixed(1)+'%')}</td>`;
+        policyTbody.appendChild(tr);
+      });
+    }
+
+    function renderReport(){
+      reportBox.textContent = reportText || 'Load AWE_rec_report.txt to see the report summary here.';
+    }
+
+    function renderChart(){
+      const el=riskChart;
+      if(!Array.isArray(risks)||risks.length===0){
+        el.innerHTML='<div class="text-white/70 text-sm">Load risks/actions to view the timeline.</div>'; return;
+      }
+      const k=currentFailure||'Leakage';
+
+      // --- window last 1000 minutes for clarity/perf ---
+      const N=risks.length, start=Math.max(0, N-1000);
+      const slice=risks.slice(start);
+
+      const times=slice.map(r=> r.Time||'');
+      const risk =slice.map(r=> toNumber(r['risk_'+k]));
+      const thr  =slice.map(r=> toNumber(r['thr_'+k]));
+      const phases=slice.map(r=> r.Phase||'—');
+
+      phaseLegend.textContent='Phases: Shutdown · Startup · Normal · Other';
+
+      // Softer, consistent phase bands
+      const band={Shutdown:'rgba(248,113,113,0.06)', /* red-400 */
+                  Startup :'rgba(139,92,246,0.10)',  /* violet-500 */
+                  Normal  :'rgba(45,212,191,0.08)',  /* teal-400 */
+                  Other   :'rgba(255,255,255,0.04)'};
+      const shapes=[];
+      let curStart=0, curPhase=phases[0];
+      for(let i=1;i<phases.length;i++){
+        if(phases[i]!==curPhase){
+          shapes.push({type:'rect',xref:'x',yref:'paper',
+            x0:times[curStart], x1:times[i-1], y0:0, y1:1,
+            fillcolor:band[curPhase]||band.Other, line:{width:0}});
+          curStart=i; curPhase=phases[i];
+        }
+      }
+      shapes.push({type:'rect',xref:'x',yref:'paper',
+        x0:times[curStart], x1:times[times.length-1], y0:0, y1:1,
+        fillcolor:band[curPhase]||band.Other, line:{width:0}});
+
+      // action markers aligned to window
+      let actionX=[], actionY=[], actionText=[];
+      if(Array.isArray(actions)){
+        actions.filter(a=>a.Failure===k).forEach(a=>{
+          const i=Number(a.idx);
+          if(Number.isFinite(i) && i>=start && i<N){
+            const rel=i-start;
+            actionX.push(times[rel]); actionY.push(risk[rel]??null);
+            actionText.push(`${a.Action} @ ${a.Time}`);
+          }
+        });
+      }
+
+      const data=[
+        { x:times, y:risk, type:'scatter', mode:'lines', name:'Risk',
+          line:{ width:2, color:getComputedStyle(document.documentElement).getPropertyValue('--tw-color-risk') || '#2DD4BF' },
+          hovertemplate:'%{x}<br>Risk: %{y:.3f}<extra></extra>' },
+        { x:times, y:thr, type:'scatter', mode:'lines', name:'Threshold',
+          line:{ width:2, dash:'dot', color:getComputedStyle(document.documentElement).getPropertyValue('--tw-color-thr') || '#F59E0B' },
+          hovertemplate:'%{x}<br>Thr: %{y:.3f}<extra></extra>' },
+        { x:actionX, y:actionY, type:'scatter', mode:'markers', name:'Actions',
+          marker:{ size:10, symbol:'star', line:{width:0}, color:getComputedStyle(document.documentElement).getPropertyValue('--tw-color-act') || '#7CFF65' },
+          text:actionText, hovertemplate:'%{text}<extra></extra>' }
+      ];
+
+      const layout={
+        paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+        margin:{l:40,r:20,t:10,b:40},
+        xaxis:{ type:'category', tickfont:{color:'#dbeafe'}, showgrid:false },
+        yaxis:{ tickfont:{color:'#dbeafe'}, rangemode:'tozero',
+                gridcolor:'rgba(255,255,255,0.08)', zerolinecolor:'rgba(255,255,255,0.12)'},
+        legend:{ font:{color:'#eaefff'} },
+        hoverlabel:{ bgcolor:'#0b1020', bordercolor:'#1f2937', font:{color:'#e5e7eb'} },
+        shapes
+      };
+      Plotly.newPlot(el, data, layout, {displayModeBar:false, responsive:true});
+    }
+
+    function pickDefaultFailure(){
+      if(!Array.isArray(actions)||actions.length===0) return 'Leakage';
+      const counts={}; actions.forEach(a=> counts[a.Failure]=(counts[a.Failure]||0)+1);
+      const best=Object.entries(counts).sort((a,b)=>b[1]-a[1])[0];
+      return best? best[0] : 'Leakage';
+    }
+  </script>
+</body>
+</html>
